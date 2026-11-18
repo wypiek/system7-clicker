@@ -2,6 +2,11 @@
 /* Core game state, rules, events and persistence. No DOM rendering here. */
 
 const SAVE_KEY = 'system7clicker.save.v1';
+const BACKUP_KEY = 'system7clicker.backup.v1';
+const LOCK_KEY = 'system7clicker.lock';
+const TAKEOVER_KEY = 'system7clicker.takeover';
+const TAB_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+const LOCK_STALE_MS = 10000;
 const SAVE_PREFIX = 'S7C1:';
 const TRASH_FILL_SECONDS = 600;
 const OFFLINE_RATE = 0.5;
@@ -42,6 +47,7 @@ const G = {
   nextLucky: 0, luckyActive: false,
   nextBomb: 0, bombActive: false,
   clickTimes: [],
+  paused: false,
   _ev: {},
   on(ev, fn) { (this._ev[ev] = this._ev[ev] || []).push(fn); },
   emit(ev, data) { (this._ev[ev] || []).forEach(fn => { try { fn(data); } catch (e) { console.error(e); } }); },
@@ -271,9 +277,9 @@ function emptyTrash() {
 
 /* ---------- System updates (prestige) ---------- */
 
-function potentialPatches() { return Math.floor(Math.cbrt(S.lifetimeBytes / 1e12)); }
-function patchProgress() { const p = Math.cbrt(S.lifetimeBytes / 1e12); return p - Math.floor(p); }
-function nextPatchAt() { return Math.pow(potentialPatches() + 1, 3) * 1e12; }
+function potentialPatches() { return Math.floor(Math.cbrt(S.lifetimeBytes / 1e10)); }
+function patchProgress() { const p = Math.cbrt(S.lifetimeBytes / 1e10); return p - Math.floor(p); }
+function nextPatchAt() { return Math.pow(potentialPatches() + 1, 3) * 1e10; }
 
 function installUpdate() {
   const pot = potentialPatches();
@@ -286,6 +292,7 @@ function installUpdate() {
     bombLosses: S.bombLosses, trashEmptied: S.trashEmptied, buildingsSold: S.buildingsSold,
     eggs: S.eggs, created: S.created, playTime: S.playTime, settings: S.settings,
   };
+  makeBackup('installing a system update');
   applyState({ ...freshState(), ...keep });
   saveGame();
   return gained;
@@ -345,7 +352,7 @@ function gameTick() {
   const now = performance.now();
   let dt = (now - _lastTick) / 1000;
   _lastTick = now;
-  if (!(dt > 0)) return;
+  if (G.paused || !(dt > 0)) return;
   if (dt > OFFLINE_CAP) dt = OFFLINE_CAP;
   update(dt);
   _accAch += dt;
@@ -371,6 +378,12 @@ function serialize() {
 }
 
 function saveGame() {
+  if (G.paused) return false;
+  if (lockHeldElsewhere()) {
+    // Another tab owns the save; never overwrite its newer progress.
+    pauseTab();
+    return false;
+  }
   try {
     localStorage.setItem(SAVE_KEY, serialize());
     return true;
@@ -460,6 +473,7 @@ function loadGame() {
 }
 
 function resetGame() {
+  makeBackup('erasing the disk');
   const settings = S.settings;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
   applyState({ ...freshState(), settings });
@@ -502,7 +516,121 @@ function importSave(text) {
   if (!obj || typeof obj !== 'object' || typeof obj.bytes !== 'number' || !obj.buildings) {
     throw new Error('That doesn’t look like a System7 Clicker save. Check that you copied the whole code.');
   }
+  makeBackup('importing a save');
   applyState(obj);
   S.lastSave = Date.now();
   saveGame();
+}
+
+/* ---------- Automatic backup (one slot) ---------- */
+
+function makeBackup(reason) {
+  try {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify({ reason, time: Date.now(), save: serialize() }));
+  } catch (e) { /* storage full or blocked */ }
+}
+
+function readBackup() {
+  try {
+    const b = JSON.parse(localStorage.getItem(BACKUP_KEY));
+    return b && typeof b.save === 'string' ? b : null;
+  } catch (e) { return null; }
+}
+
+/** Swaps the current game with the backup, so restoring can itself be undone. */
+function restoreBackup() {
+  const b = readBackup();
+  if (!b) return false;
+  const obj = JSON.parse(b.save);
+  makeBackup('restoring a backup');
+  applyState(obj);
+  S.lastSave = Date.now();
+  saveGame();
+  return true;
+}
+
+/* ---------- One active tab at a time ---------- */
+
+function readLock() {
+  try { return JSON.parse(localStorage.getItem(LOCK_KEY)); } catch (e) { return null; }
+}
+
+function writeLock(owner = TAB_ID) {
+  try { localStorage.setItem(LOCK_KEY, JSON.stringify({ id: owner, t: Date.now() })); } catch (e) { /* ignore */ }
+}
+
+function releaseLock() {
+  const l = readLock();
+  if (l && l.id === TAB_ID) { try { localStorage.removeItem(LOCK_KEY); } catch (e) { /* ignore */ } }
+}
+
+function lockHeldElsewhere() {
+  const l = readLock();
+  return !!(l && l.id !== TAB_ID && Date.now() - l.t < LOCK_STALE_MS);
+}
+
+function pauseTab() {
+  if (G.paused) return;
+  G.paused = true;
+  G.emit('paused');
+}
+
+/** Reloads the latest save from storage and makes this tab the active one. */
+function resumeTab() {
+  writeLock();
+  const info = loadGame();
+  G.paused = false;
+  _lastTick = performance.now();
+  scheduleLucky();
+  G.emit('resumed', info);
+}
+
+function startTabGuard() {
+  if (lockHeldElsewhere()) pauseTab();
+  else writeLock();
+  setInterval(() => {
+    if (G.paused) return;
+    if (lockHeldElsewhere()) pauseTab();
+    else writeLock();
+  }, 3000);
+  addEventListener('storage', e => {
+    if (e.key === LOCK_KEY && !G.paused) {
+      const l = readLock();
+      if (l && l.id !== TAB_ID) pauseTab();
+    } else if (e.key === TAKEOVER_KEY && !G.paused && e.newValue) {
+      let req = null;
+      try { req = JSON.parse(e.newValue); } catch (err) { req = null; }
+      if (!req || req.id === TAB_ID) return;
+      saveGame();
+      writeLock(req.id);
+      pauseTab();
+    }
+  });
+  addEventListener('pagehide', releaseLock);
+  addEventListener('pageshow', e => {
+    if (!e.persisted) return;
+    if (lockHeldElsewhere()) pauseTab(); else if (!G.paused) writeLock();
+  });
+}
+
+/** Asks the active tab (if any) to save and hand over, then resumes here. */
+function requestTakeover() {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      removeEventListener('storage', onStorage);
+      resumeTab();
+      resolve();
+    };
+    const onStorage = e => {
+      if (e.key !== LOCK_KEY) return;
+      const l = readLock();
+      if (l && l.id === TAB_ID) finish();
+    };
+    addEventListener('storage', onStorage);
+    try { localStorage.setItem(TAKEOVER_KEY, JSON.stringify({ id: TAB_ID, t: Date.now() })); } catch (e) { /* ignore */ }
+    setTimeout(finish, 1500);
+  });
 }

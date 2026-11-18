@@ -503,6 +503,7 @@ const MENUS = [
       { label: 'Save', key: 'S', act: manualSave },
       { label: 'Export Save…', key: 'E', act: showExport },
       { label: 'Import Save…', key: 'I', act: showImport },
+      { label: 'Restore Backup…', act: askRestoreBackup, disabled: () => !readBackup() },
       '-',
       { label: 'Close Window', act: () => { const a = activeId(); if (a) closeWindow(a); }, disabled: () => !activeId() },
       '-',
@@ -1147,7 +1148,7 @@ function buildReadme(body) {
       <li>Keep an eye out for golden <b>Lucky Disks</b> on the desktop. Click them fast for big bonuses!</li>
       <li>Junk piles up in the <b>Trash</b>. Double-click it now and then to recycle the junk into bytes.</li>
       <li>Every achievement boosts production by 1%.</li>
-      <li>Written a few terabytes? Use <b>Special ▸ Install System Update…</b> to start over with permanent patches (+1% production each).</li>
+      <li>Written around 10 GB? Use <b>Special ▸ Install System Update…</b> to start over with permanent patches (+1% production each). The progress bar in the Clicker window shows how close the next patch is.</li>
       <li>Every so often a system error pops up. Resume to play it safe, or Restart and take your chances.</li>
     </ul>
     <h3>Saving</h3>
@@ -1248,6 +1249,7 @@ function showBomb() {
   const t = setTimeout(() => p.close('timeout'), 15000);
   p.then(v => {
     clearTimeout(t);
+    if (v === 'paused') { G.bombActive = false; scheduleBomb(); return; }
     const r = bombResolve(v);
     if (r.bad) Sound.error(); else if (v === 'restart') Sound.chord();
     notify('bomb', r.title, esc(r.text));
@@ -1370,6 +1372,27 @@ function confirmReset() {
   });
 }
 
+function askRestoreBackup() {
+  const b = readBackup();
+  if (!b) { alertBox('doc', '<b>No backup yet.</b><p>A backup is made automatically before you import a save, erase the disk or install a system update.</p>'); return; }
+  let preview = '';
+  try {
+    const o = JSON.parse(b.save);
+    preview = `It has <b>${fmtBytes(+o.bytes || 0)}</b> on disk and System ${versionString(Math.floor(+o.patches || 0))}.`;
+  } catch (e) { preview = ''; }
+  dialog({
+    icon: 'doc',
+    html: `<b>Restore backup?</b><p>This backup was made before ${esc(b.reason)}, ${fmtDuration((Date.now() - b.time) / 1000)} ago. ${preview}</p><p>Your current game becomes the new backup, so you can switch back.</p>`,
+    buttons: [{ label: 'Cancel', cancel: true }, { label: 'Restore', value: 'go', default: true }],
+  }).then(v => {
+    if (v !== 'go') return;
+    try { restoreBackup(); } catch (e) { alertBox('alert', '<b>The backup could not be read.</b>'); return; }
+    afterLoad();
+    Sound.chord();
+    notify('doc', 'Backup restored', `${fmtBytes(S.bytes)} on disk.`);
+  });
+}
+
 function undoJoke() {
   Sound.error();
   egg('undo');
@@ -1419,6 +1442,7 @@ function runInstaller(pot) {
   const steps = ['Reading release notes (just kidding)…', 'Copying System file…', 'Updating extensions…', 'Rebuilding desktop file…', 'Blessing System Folder…'];
   let i = 0;
   const iv = setInterval(() => {
+    if (G.paused) { clearInterval(iv); return; }
     i++;
     const bar = $('#inst-bar'), step = $('#inst-step');
     if (bar) bar.style.width = Math.min(100, i * 4) + '%';
@@ -1559,6 +1583,20 @@ function init() {
   G.on('lucky-spawn', spawnLucky);
   G.on('bomb', showBomb);
   G.on('buffs', renderBuffs);
+  G.on('paused', () => {
+    hideBalloon();
+    closeMenus();
+    openDialogs.slice().forEach(d => d.close('paused'));
+    $('#paused-icon').innerHTML = iconImg('alert', 48);
+    $('#paused').hidden = false;
+  });
+  G.on('resumed', () => {
+    $('#paused').hidden = true;
+    afterLoad();
+    notify('floppy', 'Playing here now', `Loaded your latest save: ${fmtBytes(S.bytes)} on disk.`);
+  });
+  $('#paused-take').addEventListener('click', () => requestTakeover());
+  startTabGuard();
 
   buildMenubar();
   buildDeskIcons();
@@ -1595,6 +1633,7 @@ function init() {
   newsTimer = setInterval(nextNews, 9000);
 
   runStartup(() => {
+    if (G.paused) return;
     if (info.offline && info.offline.gain > 0) {
       alertBox('floppy', `<b>Welcome back!</b><p>You were away for <b>${fmtDuration(info.offline.sec)}</b>. Your computer kept writing at half speed and saved <b>${fmtBytes(info.offline.gain)}</b>.</p>`);
     } else if (info.corrupt) {

@@ -13,10 +13,11 @@ It's plain HTML, CSS and JavaScript with no build step and no backend, so any st
 - **Lucky Disks:** golden floppies show up on the desktop now and then. Click one for a big bonus, a 7× *Frenzy*, a 777× *Click Frenzy*, or a *Defrag Rush*.
 - **System errors:** a bomb dialog appears every so often. *Resume* is the safe choice. *Restart* is a gamble.
 - **Trash:** junk files pile up in the Trash over time. Empty it to recycle them into bytes.
-- **System Updates (prestige):** start over to earn permanent *patches*, each worth +1% production. The menu bar shows your version going from System 7.0 to 7.0.1, 7.1 and up.
+- **System Updates (prestige):** once you've written about 10 GB, start over to earn permanent *patches*, each worth +1% production. The menu bar shows your version going from System 7.0 to 7.0.1, 7.1 and up.
 - **146 achievements** (each one adds +1% production), including secret ones hidden around the desktop.
 - **Offline progress:** your computer keeps writing at half speed while you're away (up to 7 days).
 - **Saving:** autosaves to `localStorage` every 30 seconds and when you leave the page. **File ▸ Export Save…** lets you copy a code or download a `.txt` file, and **File ▸ Import Save…** takes a pasted code or a file.
+- **Safety nets:** a backup is made automatically before an import, an erase or a system update, and **File ▸ Restore Backup…** swaps it back in. If the game is open in two tabs, only one runs; the other pauses so it can't overwrite your save, and *Play Here Instead* moves the game over.
 - **The desktop:** draggable windows with striped title bars, close, zoom and roll-up boxes, and resize handles. There's a menu bar with menus that blink when you pick an item, desktop icons, a Finder-style Hard Disk window, Balloon Help, a Control Panel with 10 desktop patterns, synthesized sound effects and a startup screen with an icon parade. All the pixel art is original.
 - **Phones:** on narrow screens the windows stack vertically.
 
