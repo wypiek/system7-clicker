@@ -31,7 +31,7 @@ function freshState() {
     created: now, runStart: now, lastSave: now, playTime: 0,
     settings: {
       sound: true, volume: 0.5, particles: true, news: true,
-      startup: true, balloons: true, pattern: 'dither',
+      startup: true, balloons: true, pattern: 'classic',
     },
   };
 }

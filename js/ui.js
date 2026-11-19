@@ -156,9 +156,9 @@ function notify(icon, title, text, opts = {}) {
   const box = $('#notes');
   const n = document.createElement('div');
   n.className = 'note';
-  n.innerHTML = `${iconImg(icon, 32, opts.swap)}<div><b>${esc(title)}</b><small>${text}</small></div>`;
+  n.innerHTML = `<div class="note-bar"></div><div class="note-body">${iconImg(icon, 16, opts.swap)}<div><span class="note-title">${esc(title)}</span><small>${text}</small></div></div>`;
   box.appendChild(n);
-  while (box.children.length > 5) box.firstChild.remove();
+  while (box.children.length > 3) box.firstChild.remove();
   const kill = () => { n.classList.add('out'); setTimeout(() => n.remove(), 300); };
   n.addEventListener('click', kill);
   setTimeout(kill, opts.ms || 5000);
@@ -320,7 +320,7 @@ function createWindow(id) {
     + (def.resizable ? '<button class="wbox zoom" title="Zoom" aria-label="Zoom"></button>' : '')
     + `<button class="wbox shade" title="Roll up" aria-label="Roll up"></button></div>`
     + `<div class="wbody"></div>`
-    + (def.resizable ? '<div class="wfoot"><span class="foot-text"></span><div class="grow"></div></div>' : '');
+    + (def.resizable ? '<div class="wfoot"><div class="grow"></div></div>' : '');
   desktop.appendChild(el);
   winEls[id] = el;
   def.build($('.wbody', el), el);
@@ -563,7 +563,7 @@ let openMenu = null;
 
 function buildMenubar() {
   const mb = $('#menubar');
-  mb.innerHTML = '<div class="mb-left"></div><div class="mb-right"><span class="mb-status" id="mb-version"></span><span class="mb-status" id="mb-clock"></span></div>';
+  mb.innerHTML = '<div class="mb-left"></div><div class="mb-right"><span class="mb-status" id="mb-clock"></span></div>';
   const left = $('.mb-left', mb), right = $('.mb-right', mb);
   MENUS.forEach(m => left.appendChild(makeMenuTitle(m)));
   right.appendChild(makeMenuTitle(HELP_MENU));
@@ -709,7 +709,7 @@ function buildClicker(body) {
     <div class="clicker">
       <div class="bank"><div class="bank-amount" id="bank">0 bytes</div><div class="bank-rate" id="rate"></div></div>
       <div class="disk-area" id="disk-area">
-        <div class="disk" id="disk" role="button" aria-label="Click the floppy disk">${iconImg('floppy', 160)}</div>
+        <div class="disk" id="disk" role="button" aria-label="Click the floppy disk">${iconImg('floppy', 128)}</div>
       </div>
       <div class="buffs" id="buffs"></div>
       <div class="updbox" id="updbox">
@@ -742,7 +742,6 @@ function onDiskDown(e) {
     const r = area.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
     spawnParticle(area, x, y, '+' + fmtBytes(gain, 1));
-    spawnBits(area, x, y, 2);
   }
 }
 
@@ -755,22 +754,6 @@ function spawnParticle(parent, x, y, text, cls = '') {
   p.style.top = y + 'px';
   parent.appendChild(p);
   setTimeout(() => p.remove(), 1000);
-}
-
-function spawnBits(parent, x, y, n) {
-  if ($$('.bit', parent).length > 40) return;
-  for (let i = 0; i < n; i++) {
-    const b = document.createElement('div');
-    b.className = 'bit';
-    b.textContent = Math.random() < 0.5 ? '0' : '1';
-    b.style.left = x + 'px';
-    b.style.top = y + 'px';
-    const a = Math.random() * Math.PI * 2, dist = 40 + Math.random() * 50;
-    b.style.setProperty('--dx', Math.cos(a) * dist + 'px');
-    b.style.setProperty('--dy', Math.sin(a) * dist + 'px');
-    parent.appendChild(b);
-    setTimeout(() => b.remove(), 800);
-  }
 }
 
 let newsTimer = 0;
@@ -809,18 +792,15 @@ function buildStore(body) {
   body.innerHTML = `
     <div class="store">
       <div class="store-toolbar">
-        <div class="modes">
-          <label><input type="radio" class="rad" name="smode" value="buy"> Buy</label>
-          <label><input type="radio" class="rad" name="smode" value="sell"> Sell</label>
-        </div>
-        <div class="seg" id="store-amt">
-          <button data-amt="1">1</button><button data-amt="10">10</button><button data-amt="100">100</button><button data-amt="max">Max</button>
-        </div>
+        <label><input type="radio" class="rad" name="smode" value="buy"> Buy</label>
+        <label><input type="radio" class="rad" name="smode" value="sell"> Sell</label>
+        <span class="spacer"></span>
+        <label>Quantity:<select class="popup" id="store-amt"><option value="1">1</option><option value="10">10</option><option value="100">100</option><option value="max">Max</option></select></label>
       </div>
       <div class="scroll store-scroll" id="store-scroll">
-        <div class="section-head"><span>Upgrades</span><span id="upg-count"></span></div>
-        <div class="upgrade-grid" id="upgrades"></div>
-        <div class="section-head"><span>Hardware &amp; Software</span><span id="bld-total"></span></div>
+        <div class="list-head"><span>Upgrades</span><span id="upg-count"></span></div>
+        <div class="palette" id="upgrades"></div>
+        <div class="list-head cols"><span></span><span class="sorted">Name</span><span>Owned</span><span id="price-head">Price</span></div>
         <div id="buildings"></div>
       </div>
     </div>`;
@@ -828,12 +808,11 @@ function buildStore(body) {
     r.checked = r.value === UI.storeMode;
     r.addEventListener('change', () => { UI.storeMode = r.value; saveUI(); renderStore(true); });
   });
-  $$('#store-amt button', body).forEach(b => {
-    b.addEventListener('click', () => {
-      UI.storeAmt = b.dataset.amt === 'max' ? 'max' : +b.dataset.amt;
-      saveUI();
-      renderStore(true);
-    });
+  $('#store-amt', body).addEventListener('change', e => {
+    const v = e.target.value;
+    UI.storeAmt = v === 'max' ? 'max' : +v;
+    saveUI();
+    renderStore(true);
   });
 
   const ups = $('#upgrades', body);
@@ -888,14 +867,14 @@ function renderStore(force = false) {
   if (force || key !== storeKey) {
     storeKey = key;
     $('#upgrades').innerHTML = ups.length
-      ? ups.map(u => `<div class="upg ${u.badge}" data-id="${u.id}">${iconImg(u.icon, 32, u.swap)}</div>`).join('')
-      : '<div class="empty">No upgrades available yet. Keep clicking!</div>';
+      ? ups.map(u => `<div class="upg" data-id="${u.id}"><span class="ic">${iconImg(u.icon, 16, u.swap)}</span></div>`).join('')
+      : '<div class="empty">None available yet.</div>';
     $('#buildings').innerHTML = vis.map(({ b, mystery }) =>
-      `<div class="bld${mystery ? ' mystery' : ''}" data-id="${b.id}">${iconImg(b.icon, 32)}`
-      + `<div class="bld-info"><div class="bld-name">${mystery ? '???' : esc(b.name)}</div><div class="bld-cost"></div></div>`
-      + `<div class="bld-count"></div></div>`).join('');
+      `<div class="bld${mystery ? ' mystery' : ''}" data-id="${b.id}"><span class="ic">${iconImg(b.icon, 16)}</span>`
+      + `<span class="bld-name">${mystery ? '???' : esc(b.name)}</span><span class="bld-count"></span><span class="bld-cost"></span></div>`).join('');
     $$('input[name=smode]').forEach(r => { r.checked = r.value === UI.storeMode; });
-    $$('#store-amt button').forEach(b => b.classList.toggle('on', String(UI.storeAmt) === b.dataset.amt));
+    $('#store-amt').value = String(UI.storeAmt);
+    $('#price-head').textContent = UI.storeMode === 'sell' ? 'Refund' : 'Price';
   }
   updateStore();
 }
@@ -916,8 +895,8 @@ function updateStore() {
     const { amt, price, can } = storeAmountFor(b);
     const mystery = row.classList.contains('mystery');
     const cost = UI.storeMode === 'sell'
-      ? (amt > 0 ? `Sell ${amt} for ${fmtBytes(price)}` : 'None to sell')
-      : fmtBytes(price) + (amt > 1 ? ` for ${amt}` : '');
+      ? (amt > 0 ? fmtBytes(price) + (amt > 1 ? ` (${amt})` : '') : '-')
+      : fmtBytes(price) + (amt > 1 ? ` (${amt})` : '');
     const costEl = row.querySelector('.bld-cost');
     if (costEl.textContent !== cost) costEl.textContent = cost;
     const cnt = owned(b.id) ? String(owned(b.id)) : '';
@@ -928,10 +907,6 @@ function updateStore() {
   $$('#upgrades .upg').forEach(t => t.classList.toggle('can', S.bytes >= UPGRADE_BY_ID[t.dataset.id].cost));
   const n = availableUpgrades().length;
   $('#upg-count').textContent = n ? `${n} available` : '';
-  const total = totalBuildings(S);
-  $('#bld-total').textContent = total ? `${total} owned` : '';
-  const foot = $('#win-store .foot-text');
-  if (foot) foot.textContent = `${UI.storeMode === 'sell' ? 'Selling' : 'Buying'} ${UI.storeAmt === 'max' ? 'max' : '×' + UI.storeAmt} · ${G.upgradeSet.size} upgrades installed`;
 }
 
 function upgradeBalloon(id) {
@@ -967,7 +942,7 @@ function buildAchievements(body) {
   bindBalloons($('#ach-grid', body), '.ach', el => {
     const a = ACH_BY_ID[el.dataset.id];
     const got = G.achSet.has(a.id);
-    if (a.secret && !got) return '<div class="b-title">???</div>A secret achievement. Explore the desktop!';
+    if (a.secret && !got) return '<div class="b-title">???</div>A secret. Poke around the desktop.';
     return `<div class="b-title">${esc(a.name)}</div><div class="b-sub">${got ? 'Unlocked · +1% production' : 'Locked'}</div><div>${esc(a.desc)}</div>`;
   });
 }
@@ -982,11 +957,9 @@ function renderAchievements() {
   achKey = key;
   $('#ach-grid').innerHTML = ACHIEVEMENTS.map(a => {
     const got = G.achSet.has(a.id);
-    const inner = a.secret && !got ? '?' : iconImg(a.icon, 32, a.swap);
+    const inner = a.secret && !got ? '?' : `<span class="ic">${iconImg(a.icon, 16, a.swap)}</span>`;
     return `<div class="ach${got ? '' : ' locked'}${a.secret ? ' secret' : ''}" data-id="${a.id}">${inner}</div>`;
   }).join('');
-  const foot = $('#win-achievements .foot-text');
-  if (foot) foot.textContent = `${total - n} to go`;
 }
 
 /* ---------- Statistics window ---------- */
@@ -1035,7 +1008,7 @@ function renderStats() {
     ${row('Lucky Disk frequency', '×' + luckyFreq())}
     </table>
     <h3>Installed Upgrades</h3>
-    <div class="mini-grid">${installed.map(u => `<div class="upg ${u.badge}" data-id="${u.id}">${iconImg(u.icon, 16, u.swap)}</div>`).join('') || '<span class="small">None yet.</span>'}</div>`;
+    <div class="mini-grid">${installed.map(u => `<div class="upg owned" data-id="${u.id}"><span class="ic">${iconImg(u.icon, 16, u.swap)}</span></div>`).join('') || 'None yet.'}</div>`;
   const box = $('#stats');
   if (box.dataset.n !== String(installed.length)) { box.innerHTML = html; box.dataset.n = installed.length; return; }
   // Avoid re-rendering the icon grid every second (keeps balloons stable).
@@ -1179,8 +1152,8 @@ function buildReadme(body) {
 
 function buildAbout(body) {
   body.innerHTML = `<div class="about">
-    <div class="about-top">${iconImg('floppy', 48)}<div><div class="about-title">System7 Clicker</div><div>System Software <span id="ab-ver"></span></div><div class="small">A clicker for beige computers</div></div>
-    <div class="about-mem"><div>Total Written: <b id="ab-total"></b></div><div>Largest Unused Block: <b id="ab-bank"></b></div></div></div>
+    <div class="about-top">${iconImg('floppy', 32)}<div><div>System7 Clicker</div><div class="small">System Software <span id="ab-ver"></span></div></div>
+    <div class="about-mem small"><div>Total Written: <b id="ab-total"></b></div><div>Largest Unused Block: <b id="ab-bank"></b></div></div></div>
     <div class="about-apps" id="ab-apps"></div>
   </div>`;
 }
@@ -1207,7 +1180,7 @@ function spawnLucky() {
   el.className = 'lucky';
   el.setAttribute('role', 'button');
   el.setAttribute('aria-label', 'Lucky Disk');
-  el.innerHTML = iconImg('floppy', 48, 'gold');
+  el.innerHTML = iconImg('floppy', 64, 'gold');
   const W = desktop.clientWidth, H = desktop.clientHeight;
   const x = 20 + Math.random() * Math.max(1, W - 110);
   const y = desktop.scrollTop + 20 + Math.random() * Math.max(1, H - 110);
@@ -1230,9 +1203,8 @@ function spawnLucky() {
     const r = luckyClicked();
     Sound.lucky();
     notify('floppy', r.title, esc(r.text), { swap: 'gold' });
-    spawnParticle(desktop, x + 24, y + 10, r.short, 'big');
-    el.classList.add('got');
-    setTimeout(() => el.remove(), 350);
+    spawnParticle(desktop, x + 32, y + 16, r.short, 'big');
+    el.remove();
     renderBuffs();
   });
 }
@@ -1306,7 +1278,7 @@ function showExport() {
     html: `<b>Export Save</b><p>Keep this code somewhere safe, or download it as a file. Load it later with <b>File ▸ Import Save…</b></p><textarea class="code" readonly spellcheck="false">${esc(code)}</textarea>`,
     buttons: [
       { label: 'Copy', keep: true, onClick: (d, close, btn) => copyText(code, $('textarea', d), btn) },
-      { label: 'Download', keep: true, onClick: () => downloadText(code, `system7-clicker-${todayStamp()}.txt`) },
+      { label: 'Save As…', keep: true, onClick: () => downloadText(code, `system7-clicker-${todayStamp()}.txt`) },
       { label: 'Done', default: true, cancel: true },
     ],
     onOpen: d => { const ta = $('textarea', d); ta.focus(); ta.select(); },
@@ -1496,7 +1468,7 @@ function runStartup(cb, force = false) {
     finished = true;
     clearInterval(iv);
     st.classList.add('hide');
-    setTimeout(() => { st.style.display = 'none'; }, 360);
+    st.style.display = 'none';
     if (cb) cb();
   };
   if (!S.settings.startup && !force) {
@@ -1548,7 +1520,6 @@ function fastUpdate() {
 }
 
 function slowUpdate() {
-  setText('mb-version', 'System ' + versionString(S.patches));
   setText('mb-clock', new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
   document.title = `${fmtBytes(S.bytes)} · System7 Clicker`;
   if (isOpen('stats')) renderStats();
@@ -1577,7 +1548,7 @@ function init() {
   const info = loadGame();
   G.on('achievement', a => {
     Sound.achieve();
-    notify(a.icon, a.name, `Achievement unlocked! ${esc(a.desc)}`, { swap: a.swap });
+    notify(a.icon, a.name, esc(a.desc), { swap: a.swap });
     if (isOpen('achievements')) renderAchievements();
   });
   G.on('lucky-spawn', spawnLucky);
@@ -1587,7 +1558,7 @@ function init() {
     hideBalloon();
     closeMenus();
     openDialogs.slice().forEach(d => d.close('paused'));
-    $('#paused-icon').innerHTML = iconImg('alert', 48);
+    $('#paused-icon').innerHTML = iconImg('alert', 32);
     $('#paused').hidden = false;
   });
   G.on('resumed', () => {
