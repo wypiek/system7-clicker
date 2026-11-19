@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>System7 Clicker</title>
+<meta name="description" content="A retro desktop clicker game. Click the floppy disk, write bytes, buy hardware.">
+<meta name="theme-color" content="#909090">
+<link rel="icon" href="data:,">
+<link rel="preload" href="fonts/s7-system.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/s7-small.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/system7.css">
+</head>
+<body>
+<div id="startup">
+  <div class="welcome"><div class="welcome-inner">
+    <div id="welcome-icon"></div>
+    <div>Welcome to System7 Clicker.</div>
+  </div></div>
+  <div id="parade"></div>
+</div>
+<div id="shutdown" hidden>
+  <div>It is now safe to switch off your computer.</div>
+  <button class="btn" id="shutdown-restart">Restart</button>
+</div>
+<div id="paused" hidden>
+  <div class="welcome"><div class="welcome-inner">
+    <div id="paused-icon"></div>
+    <div><b>System7 Clicker is already running in another tab.</b></div>
+    <div class="small">This copy is paused so it can’t overwrite your save.</div>
+    <button class="btn default" id="paused-take">Play Here Instead</button>
+  </div></div>
+</div>
+<div id="menubar"></div>
+<div id="desktop"><div id="desk-icons"></div></div>
+<div id="balloon"></div>
+<div id="notes"></div>
+<div id="modal-layer"></div>
+<noscript><div class="welcome" style="position:fixed;top:40%;left:50%;transform:translateX(-50%);z-index:20000"><div class="welcome-inner">System7 Clicker needs JavaScript to run.</div></div></noscript>
+<script src="js/pixels.js"></script>
+<script src="js/data.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

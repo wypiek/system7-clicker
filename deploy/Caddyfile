@@ -1,0 +1,27 @@
+# System7 Clicker - Caddy site config
+#
+# Replace "clicker.example.com" with your domain to get automatic HTTPS,
+# or with ":80" to serve plain HTTP (for example on your home network).
+# The game is static files only, so no other backend is needed.
+
+clicker.example.com {
+	root * /var/www/system7-clicker
+	encode zstd gzip
+	file_server
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+		-Server
+	}
+
+	# Fonts never change; everything else revalidates so updates show up right away.
+	@fonts path /fonts/*
+	header @fonts Cache-Control "public, max-age=31536000, immutable"
+
+	@app not path /fonts/*
+	header @app Cache-Control "no-cache"
+}
